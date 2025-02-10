@@ -1,41 +1,67 @@
 package com.tech.config;
 
+import java.security.Provider;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configurers.provisioning.UserDetailsManagerConfigurer.UserDetailsBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import jakarta.servlet.Filter;
-import lombok.RequiredArgsConstructor;
 
 @Configuration
+
 @EnableWebSecurity
-@RequiredArgsConstructor
-public class SecurityConfig<JwtAuthenticationFilter> {
 
-    private final Filter jwtAuthenticationFilter;
-    private final AuthenticationProvider authenticationProvider;
+public class SecurityConfig {
+	
+	@Autowired
+	private UserDetailsService userDetailsService;
+	@Bean
+	public AuthenticationProvider authProvider() {
+		DaoAuthenticationProvider provider=new DaoAuthenticationProvider();
+		provider.setUserDetailsService(userDetailsService);
+		provider.setPasswordEncoder(new BCryptPasswordEncoder(10));
+		return provider;
+	}
+	
+	@Bean
+	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf(AbstractHttpConfigurer::disable)
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**").permitAll() // Allow public access to authentication endpoints
-                .requestMatchers(HttpMethod.GET, "/tasks/**").hasAnyRole("USER", "ADMIN")
-                .requestMatchers(HttpMethod.POST, "/tasks/**").hasRole("ADMIN")
-                .anyRequest().authenticated()
-            )
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authenticationProvider(authenticationProvider)
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-        
-        return http.build();
-    }
+		http.csrf(customizer -> customizer.disable());
+		http.authorizeHttpRequests(request -> request.anyRequest().authenticated());
+		//http.formLogin(Customizer.withDefaults());       //no need when we are using stateless
+		http.httpBasic(Customizer.withDefaults());
+		http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+		return http.build();
+	}
+	
+	public UserDetailsService userdatDetailsService() {
+		 UserDetails user=User
+				 .withDefaultPasswordEncoder()
+				 .username("rutuja").password("1234")
+				 .roles("USER")
+				 .build();
+		 
+		 UserDetails admin=User
+				 .withDefaultPasswordEncoder()
+				 .username("admin").password("12345")
+				 .roles("ADMIN")
+				 .build();
+		 
+		 return new InMemoryUserDetailsManager(user,admin);
+	}
+
 }
